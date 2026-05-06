@@ -7218,83 +7218,6 @@
 
         function _doInitAiSummary(claimID, slNo) {
             console.log('[ClaimAI] STEP 1 START: InitAiSummary. claimID:', claimID, 'slNo:', slNo, 'ClaimAI URL:', _claimAiUrl);
-
-            // ── Check staging server first ────────────────────────────────────
-            // If staging server has pre-processed this claim, load iframe instantly.
-            // 2-second timeout so we never slow down the fallback.
-            var _stagingUrl = '@(System.Configuration.ConfigurationManager.AppSettings["StagingServerUrl"] ?? "")';
-            if (_stagingUrl) {
-                showAiStatus('Checking for pre-processed summary...');
-                $.ajax({
-                    url:     _stagingUrl + '/summary',
-                    type:    'GET',
-                    data:    { claimId: claimID, slNo: slNo },
-                    timeout: 2000,
-                    success: function(stagingRes) {
-                        console.log('[ClaimAI] Staging server response:', stagingRes);
-
-                        if (stagingRes.status === 'done' && stagingRes.jobId) {
-                            // ✅ Summary ready — load iframe instantly, no processing needed
-                            console.log('[ClaimAI] Staging: summary ready, loading iframe instantly. jobId:', stagingRes.jobId);
-                            var src = _claimAiUrl + '/job/' + encodeURIComponent(stagingRes.jobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
-                            $('#divAiLoading').hide();
-                            $('#ifrClaimAI').attr('src', src).show();
-
-
-                        } else if (stagingRes.status === 'pending') {
-                            // ⏳ Still processing — poll every 5 seconds
-                            console.log('[ClaimAI] Staging: summary pending — polling...');
-                            showAiStatus('AI Summary is being prepared... Please wait.');
-                            var _pollCount = 0;
-                            var _pollInterval = setInterval(function() {
-                                _pollCount++;
-                                $.ajax({
-                                    url:     _stagingUrl + '/summary',
-                                    type:    'GET',
-                                    data:    { claimId: claimID, slNo: slNo },
-                                    timeout: 3000,
-                                    success: function(pollRes) {
-                                        if (pollRes.status === 'done' && pollRes.jobId) {
-                                            clearInterval(_pollInterval);
-                                            console.log('[ClaimAI] Staging: summary ready after polling. jobId:', pollRes.jobId);
-                                            var src = _claimAiUrl + '/job/' + encodeURIComponent(pollRes.jobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
-                                            $('#divAiLoading').hide();
-                                            $('#ifrClaimAI').attr('src', src).show();
-                                        } else if (pollRes.status === 'failed' || _pollCount > 24) {
-                                            // failed or 2 minute timeout — fall back to on-demand
-                                            clearInterval(_pollInterval);
-                                            console.warn('[ClaimAI] Staging: failed/timeout — falling back to on-demand');
-                                            _runOnDemand(claimID, slNo, _stagingUrl);
-                                        }
-                                    },
-                                    error: function() {
-                                        clearInterval(_pollInterval);
-                                        _runOnDemand(claimID, slNo, _stagingUrl);
-                                    }
-                                });
-                            }, 5000);
-
-                        } else {
-                            // not_found or failed — fall back to on-demand processing
-                            console.log('[ClaimAI] Staging: not found/failed — running on-demand');
-                            _runOnDemand(claimID, slNo, _stagingUrl);
-                        }
-                    },
-                    error: function() {
-                        // Staging server down or timeout — fall back to on-demand
-                        console.log('[ClaimAI] Staging server unreachable — running on-demand');
-                        _runOnDemand(claimID, slNo, _stagingUrl);
-                    }
-                });
-                return; // wait for staging server response before continuing
-            }
-
-            // No staging server configured — run on-demand directly
-            _runOnDemand(claimID, slNo, '');
-        }
-
-        function _runOnDemand(claimID, slNo, stagingUrl) {
-            console.log('[ClaimAI] STEP 1 START: on-demand processing. claimID:', claimID, 'slNo:', slNo);
             showAiStatus('Loading medical bill...');
 
             $.ajax({
@@ -7333,12 +7256,12 @@
                                 console.log('[ClaimAI] Tariff not loaded — proceeding without it.');
                             }
                             showAiStatus('Submitting to AI...');
-                            SubmitAndLoadIframe(claimID, medB64, medFileName, tarB64, tarFileName, stagingUrl);
+                            SubmitAndLoadIframe(claimID, medB64, medFileName, tarB64, tarFileName);
                         },
                         error: function(xhr) {
                             console.log('[ClaimAI] GetTariffDocument error:', xhr.status, xhr.responseText);
                             // Tariff is optional — proceed without it
-                            SubmitAndLoadIframe(claimID, medB64, medFileName, null, null, stagingUrl);
+                            SubmitAndLoadIframe(claimID, medB64, medFileName, null, null);
                         }
                     });
                 },
@@ -7371,8 +7294,7 @@
             $('#divAiError').show();
         }
 
-        function SubmitAndLoadIframe(claimID, medB64, medFileName, tarB64, tarFileName, stagingUrl) {
-            stagingUrl = stagingUrl || '';
+        function SubmitAndLoadIframe(claimID, medB64, medFileName, tarB64, tarFileName) {
             console.log('[ClaimAI] SubmitAndLoadIframe. claimID:', claimID, 'hasTariff:', !!tarB64);
 
             // ── Collect Spectra field values from the DOM ─────────────────────────
@@ -7437,7 +7359,6 @@
                     if (fields.doctorNotes)  spectraFields.doctorNotes   = fields.doctorNotes;
                     if (fields.reqFacilityName)      spectraFields.availedAccommodation  = fields.reqFacilityName;
                     if (fields.approvedFacilityName) spectraFields.approvedAccommodation = fields.approvedFacilityName;
-                    // Store for postMessage to iframe (used in staging fast path)
                     if (fields.reqFacilityId)   window._claimAI_reqFacilityId   = fields.reqFacilityId;
                     if (fields.reqFacilityName) window._claimAI_reqFacilityName = fields.reqFacilityName;
                     // Restore ApprovedFacilityID from DB on page load
@@ -7532,19 +7453,7 @@
                     $('#divAiLoading').hide();
                     $('#ifrClaimAI').attr('src', src).show();
 
-                    // ── Send jobId to staging server (fire & forget) ──────────
-                    // So next time this claim is opened it loads instantly
-                    if (stagingUrl) {
-                        $.ajax({
-                            url:         stagingUrl + '/store-job',
-                            type:        'POST',
-                            contentType: 'application/json',
-                            data:        JSON.stringify({ claimId: claimID, slNo: slNo, jobId: jobId }),
-                            timeout:     3000
-                            // no success/error handler needed — fire and forget
-                        });
-                        console.log('[ClaimAI] jobId sent to staging server for future instant loads');
-                    }
+
                 },
                 error: function(xhr) {
                     console.error('[ClaimAI] StartClaimAuditProxy error:', xhr.status, xhr.responseText);
