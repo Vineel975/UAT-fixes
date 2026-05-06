@@ -1,5 +1,3 @@
-﻿
-
 /*-------------------------------------------------
        ////Code Written By B. Srinu  on 17thDec2015
        ////Description: ClaimUnlock
@@ -1111,25 +1109,13 @@ function Fill_HospitalizationDetails(data) {
     // fallback to ReqFacilityID (availed). Never reset to 0.
     var _aprvFacVal = data[0].ApprovedFacilityID || data[0].ReqFacilityID || 0;
 
-    // ClaimAI: For cataract claims (diagnosis 466), always set Approved Accommodation to Day-care
+    // ClaimAI: For cataract claims (diagnosis 466), always set Approved Accommodation to Day-care (ID=195)
     var _isCataractHosp = (typeof basicData !== 'undefined' && basicData[0] &&
                            (basicData[0].claimdiagnosis == 466 ||
                             (basicData[0].diagnosisName || '').toLowerCase().indexOf('cataract') !== -1));
     if (_isCataractHosp) {
-        var _dayCareVal = null;
-        $('#ddlApprovedFacility').find('option').each(function() {
-            var txt = $(this).text().trim().toLowerCase();
-            if (txt.indexOf('day') !== -1 && txt.indexOf('care') !== -1) {
-                _dayCareVal = $(this).val();
-                return false;
-            }
-        });
-        if (_dayCareVal) {
-            _aprvFacVal = _dayCareVal;
-            console.log('[ClaimAI] Cataract: overriding Approved Accommodation to Day-care, val=' + _dayCareVal);
-        } else {
-            console.warn('[ClaimAI] Cataract: Day-care option not found in ddlApprovedFacility');
-        }
+        _aprvFacVal = 195;
+        console.log('[ClaimAI] Cataract: Approved Accommodation set to Day-care (195)');
     }
 
     $("#ddlApprovedFacility").val(_aprvFacVal);
