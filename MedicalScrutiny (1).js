@@ -1,5 +1,3 @@
-﻿
-
 var Rese = [];
 var cHeckedcomm = [];
 var Comm_MId = 0;
@@ -10514,8 +10512,7 @@ function GetReferInsRemarks(_ClaimID, _SlNo) {
         $('#btnBillCalculator').show();
         $('#divAdjudication').show();
         $("#infertoinsurerbuttons").show();
-        // ClaimAI: Auto-click Calculate button
-        setTimeout(function () { console.log('[ClaimAI] Auto-clicking Calculate'); $('#btnBillCalculator').click(); }, 500);
+
         $('#manualapvdocupload').hide();
         if (basicData[0].RequestTypeID != 1 && basicData[0].RequestTypeID != 2 && basicData[0].RequestTypeID != 3) {
             $("#IRAction_Approve").attr('disabled', true);
@@ -13894,11 +13891,6 @@ $('#lnkAdjudication').on('click', function () {
         $('#divBillCalculation').show();
         $('#divAdjudication').show();
         $("#infertoinsurerbuttons").hide();
-        // ClaimAI: Auto-click Calculate button when Bill Calculation section appears
-        setTimeout(function () {
-            console.log('[ClaimAI] Auto-clicking Calculate button');
-            $('#btnBillCalculator').click();
-        }, 500);
         setTimeout(function () {
             var rowCount = $('#tbloverrideRuleApproval >tbody >tr').length;
             if (rowCount == 1) {
