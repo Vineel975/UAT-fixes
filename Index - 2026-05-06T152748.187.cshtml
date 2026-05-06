@@ -7432,6 +7432,10 @@
                     if (fields.dischargeDate && !spectraFields.dischargeDate)
                                              spectraFields.dischargeDate = fields.dischargeDate;
                     if (fields.doctorNotes)  spectraFields.doctorNotes   = fields.doctorNotes;
+                    if (fields.reqFacilityName)      spectraFields.availedAccommodation  = fields.reqFacilityName;
+                    if (fields.approvedFacilityName) spectraFields.approvedAccommodation = fields.approvedFacilityName;
+                    // Store reqFacilityId for Day-care logic
+                    if (fields.reqFacilityId)        window._claimAI_reqFacilityId = fields.reqFacilityId;
                     // Restore ApprovedFacilityID from DB on page load
                     // Do NOT trigger('change') — it causes Spectra handlers to reset it
                     if (fields.approvedFacilityId) {
@@ -7453,42 +7457,7 @@
                 console.warn('[ClaimAI] GetClaimFieldsForValidation failed:', e);
             }
 
-            // Availed Accommodation — resolve name from MasterData using dropdown value
-            // (dropdown may not have a visible selection if section wasn't expanded)
-            var _availedId = $('#ddlReceivedAccomodation').val();
-            if (!_availedId || _availedId === '') {
-                // fallback: read from basicData if hospData not loaded yet
-                _availedId = (typeof hospData !== 'undefined' && hospData && hospData[0])
-                             ? hospData[0].ReqFacilityID : null;
-            }
-            if (_availedId && _availedId !== '0' && _availedId !== '') {
-                var _availedName = $('#ddlReceivedAccomodation').find('option:selected').text().trim();
-                if (!_availedName || _availedName === 'Select' || _availedName === '') {
-                    // resolve from master data
-                    _availedName = (typeof getmasternamewithID === 'function' && MasterData && MasterData.mFacility)
-                                   ? getmasternamewithID(_availedId.toString(), MasterData.mFacility)
-                                   : '';
-                }
-                if (_availedName && _availedName !== 'Select') {
-                    spectraFields.availedAccommodation = _availedName;
-                    console.log('[ClaimAI] availedAccommodation:', _availedName);
-                }
-            }
-
-            // Approved Accommodation — resolve name from MasterData using dropdown value
-            var _approvedId = $('#ddlApprovedFacility').val();
-            if (_approvedId && _approvedId !== '0' && _approvedId !== '') {
-                var _approvedName = $('#ddlApprovedFacility').find('option:selected').text().trim();
-                if (!_approvedName || _approvedName === 'Select' || _approvedName === '') {
-                    _approvedName = (typeof getmasternamewithID === 'function' && MasterData && MasterData.mFacility)
-                                    ? getmasternamewithID(_approvedId.toString(), MasterData.mFacility)
-                                    : '';
-                }
-                if (_approvedName && _approvedName !== 'Select') {
-                    spectraFields.approvedAccommodation = _approvedName;
-                    console.log('[ClaimAI] approvedAccommodation:', _approvedName);
-                }
-            }
+            // Availed/Approved accommodation are now populated from DB via GetClaimFieldsForValidation above
 
             console.log('[ClaimAI] Spectra fields collected:', spectraFields);
 
@@ -9256,47 +9225,13 @@
                         sessionStorage.setItem('claimAI_jobId', savedJobId);
                         sessionStorage.setItem('claimAI_claimId', $('#hdnClaimID').val());
                     }
-                    // Step 0: For cataract claims, auto-set Approved Accommodation to Day-care
+                    // Step 0: For cataract claims, mark that Day-care needs to be set
                     var _isCataract = (typeof basicData !== 'undefined' && basicData[0] &&
                                        (basicData[0].claimdiagnosis == 466 ||
                                         (basicData[0].diagnosisName || '').toLowerCase().indexOf('cataract') !== -1));
                     if (_isCataract) {
-                        // Helper: find Day-care option value from a dropdown
-                        function findDayCareVal($ddl) {
-                            var val = null;
-                            $ddl.find('option').each(function() {
-                                var txt = $(this).text().trim().toLowerCase();
-                                if (txt.indexOf('day') !== -1 && txt.indexOf('care') !== -1) {
-                                    val = $(this).val();
-                                    return false;
-                                }
-                            });
-                            // Also try MasterData.mFacility if dropdown options not loaded
-                            if (!val && typeof MasterData !== 'undefined' && MasterData.mFacility) {
-                                $.each(MasterData.mFacility, function(i, item) {
-                                    var name = (item.Name || item.name || '').toLowerCase();
-                                    if (name.indexOf('day') !== -1 && name.indexOf('care') !== -1) {
-                                        val = item.ID || item.Id || item.id;
-                                        return false;
-                                    }
-                                });
-                            }
-                            return val;
-                        }
-
-                        var $aprvDdl2 = $('#ddlApprovedFacility');
-                        $aprvDdl2.removeAttr('disabled');
-
-                        var _dayCareVal = findDayCareVal($aprvDdl2);
-                        if (_dayCareVal) {
-                            $aprvDdl2.val(_dayCareVal);
-                            console.log('[ClaimAI] Cataract: Approved Accommodation = Day-care, val=' + _dayCareVal);
-                        } else {
-                            console.warn('[ClaimAI] Day-care option not found — will retry at hosp save step');
-                        }
-
-                        // Also store for retry at hosp save step (in case dropdown not loaded yet)
                         window._claimAI_needsDayCare = true;
+                        console.log('[ClaimAI] Cataract case detected — will set Day-care in Step 1');
                     }
 
                     // Step 1 (1s): Ensure Room/ICU days non-zero, click Save Hospitalization Details
@@ -9314,31 +9249,28 @@
                         var accomData = [{ Roomdays: String(roomVal), ICUdays: String(icuVal || 0), ExtimatedDays: String(roomVal + icuVal) }];
                         $('#hdnAccomdationRoomdays').val(JSON.stringify(accomData));
 
-                        // Retry Day-care setting here — dropdown is now loaded after page settle
+                        // Set Day-care for cataract — dropdown is loaded by now
                         if (window._claimAI_needsDayCare) {
-                            var $aprvRetry = $('#ddlApprovedFacility');
-                            $aprvRetry.removeAttr('disabled');
-                            var _retryVal = null;
-                            $aprvRetry.find('option').each(function() {
+                            var $aprvDdl = $('#ddlApprovedFacility');
+                            $aprvDdl.removeAttr('disabled');
+                            var _dayCareVal = null;
+                            // Search dropdown options for "Day Care" text
+                            $aprvDdl.find('option').each(function() {
                                 var txt = $(this).text().trim().toLowerCase();
-                                if (txt.indexOf('day') !== -1 && txt.indexOf('care') !== -1) {
-                                    _retryVal = $(this).val(); return false;
+                                if (txt === 'day care' || txt === 'daycare' || (txt.indexOf('day') !== -1 && txt.indexOf('care') !== -1)) {
+                                    _dayCareVal = $(this).val();
+                                    return false;
                                 }
                             });
-                            if (!_retryVal && typeof MasterData !== 'undefined' && MasterData.mFacility) {
-                                $.each(MasterData.mFacility, function(i, item) {
-                                    var name = (item.Name || item.name || '').toLowerCase();
-                                    if (name.indexOf('day') !== -1 && name.indexOf('care') !== -1) {
-                                        _retryVal = item.ID || item.Id || item.id; return false;
-                                    }
-                                });
-                            }
-                            if (_retryVal) {
-                                $aprvRetry.val(_retryVal);
-                                console.log('[ClaimAI] Retry: Approved Accommodation = Day-care, val=' + _retryVal);
+                            if (_dayCareVal) {
+                                $aprvDdl.val(_dayCareVal);
                                 window._claimAI_needsDayCare = false;
+                                console.log('[ClaimAI] Approved Accommodation set to Day-care, val=' + _dayCareVal);
                             } else {
-                                console.warn('[ClaimAI] Retry: Day-care option still not found');
+                                // Log all options to help debug
+                                var opts = [];
+                                $aprvDdl.find('option').each(function() { opts.push($(this).text().trim() + '=' + $(this).val()); });
+                                console.warn('[ClaimAI] Day-care not found. Options:', opts.join(', '));
                             }
                         }
 
