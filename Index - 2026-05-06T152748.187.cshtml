@@ -7096,6 +7096,22 @@
             GetInsurerRejectionMaster($('#hdnInsuranceCompanyID').val(), $('#hdnClaimProductID').val());
             var _claimIdOnLoad = $('#hdnClaimID').val();
 
+            // ClaimAI: Auto-click Calculate when Adjudication Process is clicked
+            $(document).on('click', '#lnkAdjudication', function() {
+                setTimeout(function() {
+                    if ($('#btnBillCalculator').is(':visible')) {
+                        console.log('[ClaimAI] Auto-clicking Calculate button');
+                        $('#btnBillCalculator').click();
+                    } else {
+                        // Retry if not visible yet
+                        setTimeout(function() {
+                            console.log('[ClaimAI] Auto-clicking Calculate button (retry)');
+                            $('#btnBillCalculator').click();
+                        }, 1500);
+                    }
+                }, 1500);
+            });
+
             if (!RestoreAiSummaryIfSaved(_claimIdOnLoad)) {
                 InitAiSummary(_claimIdOnLoad, $('#hdnClaimSlNo').val());
             }
