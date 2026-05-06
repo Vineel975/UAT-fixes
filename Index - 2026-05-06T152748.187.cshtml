@@ -7446,9 +7446,11 @@
                         var _savedFacId = fields.approvedFacilityId;
                         var _applyFacility = function() {
                             var $aprvDdl = $('#ddlApprovedFacility');
-                            if ($aprvDdl.find('option[value="' + _savedFacId + '"]').length > 0) {
-                                $aprvDdl.val(_savedFacId);
-                                console.log('[ClaimAI] ApprovedFacility restored silently:', _savedFacId);
+                            var _isCataractApply = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
+                            var _facToApply = _isCataractApply ? 195 : _savedFacId;
+                            if ($aprvDdl.find('option[value="' + _facToApply + '"]').length > 0) {
+                                $aprvDdl.val(_facToApply);
+                                console.log('[ClaimAI] ApprovedFacility restored silently:', _facToApply);
                             }
                         };
                         setTimeout(_applyFacility, 1000);
@@ -9394,6 +9396,9 @@
                 var ID = $('#ddlReceivedAccomodation').val();
                 // Only auto-copy to approved if no DB-saved value exists
                 if (window._claimAI_approvedFacilityId) return;
+                // ClaimAI: For cataract, always keep Day-care (195)
+                var _isCataractChg = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
+                if (_isCataractChg) { $("#ddlApprovedFacility").val(195); return; }
                 if (ID != null && ID != "" && parseInt($('#hdnClaimTypeID').val()) == 2) {
                     $("#ddlApprovedFacility").val($('#ddlReceivedAccomodation').val());
                 }
