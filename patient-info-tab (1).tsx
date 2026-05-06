@@ -55,6 +55,8 @@ interface PatientInfoTabProps {
     newValue: string | number | null | undefined
   ) => void;
   onScrollToPage?: (pageNumber: number) => void;
+  availedAccommodation?: string | null;
+  approvedAccommodation?: string | null;
 }
 
 type PatientInfoFieldKey =
@@ -290,6 +292,8 @@ export function PatientInfoTab({
   onUpdateAnalysis,
   addChangeLogEntry,
   onScrollToPage,
+  availedAccommodation,
+  approvedAccommodation,
 }: PatientInfoTabProps) {
   const patientValidation = displayAnalysis?.patientValidation;
   const patientInfoDb = displayAnalysis?.patientInfoDb;
@@ -1819,13 +1823,9 @@ export function PatientInfoTab({
       },
     ];
 
-    // Accommodation fields from spectraFields (passed via postMessage from Spectra)
-    const availedAccom  = (displayAnalysis as unknown as { spectraFields?: Record<string, string> })
-                            ?.spectraFields?.availedAccommodation ?? null;
-    const approvedAccom = (displayAnalysis as unknown as { spectraFields?: Record<string, string> })
-                            ?.spectraFields?.approvedAccommodation ?? "Day-care";
-
-    const _dummyEnd = null;
+    // Accommodation passed directly as props from result-view.tsx
+    const availedAccom  = availedAccommodation ?? null;
+    const approvedAccom = approvedAccommodation ?? "Day-care";
 
     return (
       <div className="space-y-3">
