@@ -1053,8 +1053,11 @@ function bindroomtariffdata(data) {
             $.each(data, function (i, item) {
                 $('#ID_displayRoomtariff_' + item.TariffFacility).text(item.TariffCharge);
             });
-            if ((data[0].ApprovedFacilityID != null && data[0].ApprovedFacilityID != 0) && (basicData[0].RequestTypeID == 1) && basicData[0].IsAprvFacilitychanged == false && $('#hdnClaimStageID').val() == 5 && basicData[0].ServiceTypeID == 1)
-                $("#ddlApprovedFacility").val(data[0].ApprovedFacilityID);
+            if ((data[0].ApprovedFacilityID != null && data[0].ApprovedFacilityID != 0) && (basicData[0].RequestTypeID == 1) && basicData[0].IsAprvFacilitychanged == false && $('#hdnClaimStageID').val() == 5 && basicData[0].ServiceTypeID == 1) {
+                // ClaimAI: For cataract (diagnosis 466), always use Day-care (ID=195)
+                var _isCataractTariff = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
+                $("#ddlApprovedFacility").val(_isCataractTariff ? 195 : data[0].ApprovedFacilityID);
+            }
         }
         else {
             $('#id_body_roomtariff_display').hide();
