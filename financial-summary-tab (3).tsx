@@ -616,38 +616,19 @@ export function FinancialSummaryTab({
               >
                 Benefit extraction {onBenefitExtractionClick && <span className="text-xs text-blue-500 normal-case">↗ View Benefit Plan</span>}
               </div>
-              {alignmentCappings.length > 0 && (() => {
-                // Filter to only show points matching the current diagnosis
-                // alignmentCappings entries are like "Cataract: ₹50,000 limit"
-                // diagnosis is like "Cataract RE, IMSC, BE - IMSC"
-                const diagLower = (diagnosis ?? "").toLowerCase();
-
-                const filtered = alignmentCappings.filter((cap) => {
-                  // Extract condition name (part before first colon)
-                  const condName = cap.split(":")[0].trim().toLowerCase();
-                  if (!condName) return false;
-                  // Each word in condition name must appear in diagnosis
-                  const condWords = condName.split(/\s+/).filter((w) => w.length > 2);
-                  return condWords.every((word) => diagLower.includes(word));
-                });
-
-                // Show filtered results — if nothing matches, show nothing (don't fallback to all)
-                if (filtered.length === 0) return null;
-
-                return (
-                  <ul className="space-y-1 list-disc list-inside">
-                    {filtered.map((cap, i) => {
-                      const colonIdx = cap.indexOf(": ");
-                      const text = colonIdx !== -1 ? cap.slice(colonIdx + 2) : cap;
-                      return (
-                        <li key={i} className="text-sm text-gray-800">
-                          {text}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                );
-              })()}
+              {alignmentCappings.length > 0 && (
+                <ul className="space-y-1 list-disc list-inside">
+                  {alignmentCappings.map((cap, i) => {
+                    const colonIdx = cap.indexOf(": ");
+                    const text = colonIdx !== -1 ? cap.slice(colonIdx + 2) : cap;
+                    return (
+                      <li key={i} className="text-sm text-gray-800">
+                        {text}
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
             </CardContent>
           </Card>
 
