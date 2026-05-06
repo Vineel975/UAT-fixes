@@ -7446,8 +7446,7 @@
                         var _savedFacId = fields.approvedFacilityId;
                         var _applyFacility = function() {
                             var $aprvDdl = $('#ddlApprovedFacility');
-                            var _isCataractApply = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
-                            var _facToApply = _isCataractApply ? 195 : _savedFacId;
+                                var _facToApply = 195; // ClaimAI: Always Day-care
                             if ($aprvDdl.find('option[value="' + _facToApply + '"]').length > 0) {
                                 $aprvDdl.val(_facToApply);
                                 console.log('[ClaimAI] ApprovedFacility restored silently:', _facToApply);
@@ -8080,8 +8079,7 @@
                 if (facFields.approvedFacilityId && facFields.approvedFacilityId !== '0') {
                     window._claimAI_approvedFacilityId = facFields.approvedFacilityId;
                     var $aprvDdl = $('#ddlApprovedFacility');
-                    // ClaimAI: Always set Approved Accommodation to Day-care (195)
-                    var _facIdToRestore = '195';
+                    var _facIdToRestore = '195'; // ClaimAI: Always Day-care
                     var optionExists = $aprvDdl.find('option[value="' + _facIdToRestore + '"]').length > 0;
                     console.log('[ClaimAI] Attempting restore to:', _facIdToRestore, 'option exists:', optionExists, 'isCataract:', _isCataractRestore);
                     if (optionExists) {
@@ -8971,13 +8969,10 @@
                     // Writes directly to DB via SaveHospitalizationDetailsForClaimAI,
                     // AND populates the DOM fields so the manual Save button also persists them.
                     try {
-                        // 1. Approved Accommodation = Availed Accommodation
-                        // ddlReceivedAccomodation may be disabled — read value directly from the element
+                        // ClaimAI: Always set Approved Accommodation to Day-care (195)
                         var claimAI_availed  = document.getElementById('ddlReceivedAccomodation');
                         var claimAI_approved = document.getElementById('ddlApprovedFacility');
-                        // Read availed value even if disabled (disabled selects still have .value)
-                        var claimAI_approvedFacId = (claimAI_availed ? claimAI_availed.value : '') ||
-                                                     window._claimAI_approvedFacilityId || '';
+                        var claimAI_approvedFacId = '195';
                         console.log('[ClaimAI] availed el:', claimAI_availed,
                             'availed.value:', claimAI_availed ? claimAI_availed.value : 'NO ELEMENT',
                             'window._claimAI_approvedFacilityId:', window._claimAI_approvedFacilityId,
