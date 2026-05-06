@@ -8080,11 +8080,14 @@
                 if (facFields.approvedFacilityId && facFields.approvedFacilityId !== '0') {
                     window._claimAI_approvedFacilityId = facFields.approvedFacilityId;
                     var $aprvDdl = $('#ddlApprovedFacility');
-                    var optionExists = $aprvDdl.find('option[value="' + facFields.approvedFacilityId + '"]').length > 0;
-                    console.log('[ClaimAI] Attempting restore to:', facFields.approvedFacilityId, 'option exists:', optionExists);
+                    // ClaimAI: For cataract (diagnosis 466), always restore to Day-care (195)
+                    var _isCataractRestore = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
+                    var _facIdToRestore = _isCataractRestore ? '195' : facFields.approvedFacilityId;
+                    var optionExists = $aprvDdl.find('option[value="' + _facIdToRestore + '"]').length > 0;
+                    console.log('[ClaimAI] Attempting restore to:', _facIdToRestore, 'option exists:', optionExists, 'isCataract:', _isCataractRestore);
                     if (optionExists) {
-                        $aprvDdl.val(facFields.approvedFacilityId);
-                        console.log('[ClaimAI] FacilityRestore set to:', facFields.approvedFacilityId, 'actual val now:', $aprvDdl.val());
+                        $aprvDdl.val(_facIdToRestore);
+                        console.log('[ClaimAI] FacilityRestore set to:', _facIdToRestore, 'actual val now:', $aprvDdl.val());
                     }
                 }
                 if (facFields.patientConditionId && facFields.patientConditionId !== '0') {
