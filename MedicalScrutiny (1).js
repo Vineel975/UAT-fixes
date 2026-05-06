@@ -13983,6 +13983,13 @@ $('#lnkAdjudication').on('click', function () {
         //  }
 
     }
+
+    // ClaimAI: Auto-click Calculate button after Bill Calculation section loads
+    setTimeout(function() {
+        console.log('[ClaimAI] Auto-clicking Calculate');
+        $('#btnBillCalculator').click();
+    }, 2000);
+
 });
 
 $('#lnkAudit').on('click', function () {
