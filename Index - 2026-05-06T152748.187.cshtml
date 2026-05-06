@@ -8080,10 +8080,8 @@
                 if (facFields.approvedFacilityId && facFields.approvedFacilityId !== '0') {
                     window._claimAI_approvedFacilityId = facFields.approvedFacilityId;
                     var $aprvDdl = $('#ddlApprovedFacility');
-                    // ClaimAI: For cataract (diagnosis 466), always restore to Day-care (195)
-                    var _isCataractRestore = (typeof basicData !== 'undefined' && basicData[0] && basicData[0].claimdiagnosis == 466);
-                    console.log('[ClaimAI] restoreFields: claimdiagnosis=', (typeof basicData !== 'undefined' && basicData[0]) ? basicData[0].claimdiagnosis : 'UNDEF', 'isCataract=', _isCataractRestore);
-                    var _facIdToRestore = _isCataractRestore ? '195' : facFields.approvedFacilityId;
+                    // ClaimAI: Always set Approved Accommodation to Day-care (195)
+                    var _facIdToRestore = '195';
                     var optionExists = $aprvDdl.find('option[value="' + _facIdToRestore + '"]').length > 0;
                     console.log('[ClaimAI] Attempting restore to:', _facIdToRestore, 'option exists:', optionExists, 'isCataract:', _isCataractRestore);
                     if (optionExists) {
