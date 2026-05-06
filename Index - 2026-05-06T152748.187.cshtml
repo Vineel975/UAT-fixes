@@ -7157,7 +7157,7 @@
             });
 
             // Wire up the expand click to restore iframe (not reload AI)
-            var ifrSrc = _claimAiUrl + '/job/' + encodeURIComponent(savedJobId) + '?embedded=1';
+            var ifrSrc = _claimAiUrl + '/job/' + encodeURIComponent(savedJobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
             var $collapseBtn = $widget.find('[data-action="collapse"]');
             $collapseBtn.off('click.claimAIRestore').one('click.claimAIRestore', function() {
                 $('#divAiLoading').hide();
@@ -7234,9 +7234,10 @@
                         if (stagingRes.status === 'done' && stagingRes.jobId) {
                             // ✅ Summary ready — load iframe instantly, no processing needed
                             console.log('[ClaimAI] Staging: summary ready, loading iframe instantly. jobId:', stagingRes.jobId);
-                            var src = _claimAiUrl + '/job/' + encodeURIComponent(stagingRes.jobId) + '?embedded=1';
+                            var src = _claimAiUrl + '/job/' + encodeURIComponent(stagingRes.jobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
                             $('#divAiLoading').hide();
                             $('#ifrClaimAI').attr('src', src).show();
+
 
                         } else if (stagingRes.status === 'pending') {
                             // ⏳ Still processing — poll every 5 seconds
@@ -7254,7 +7255,7 @@
                                         if (pollRes.status === 'done' && pollRes.jobId) {
                                             clearInterval(_pollInterval);
                                             console.log('[ClaimAI] Staging: summary ready after polling. jobId:', pollRes.jobId);
-                                            var src = _claimAiUrl + '/job/' + encodeURIComponent(pollRes.jobId) + '?embedded=1';
+                                            var src = _claimAiUrl + '/job/' + encodeURIComponent(pollRes.jobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
                                             $('#divAiLoading').hide();
                                             $('#ifrClaimAI').attr('src', src).show();
                                         } else if (pollRes.status === 'failed' || _pollCount > 24) {
@@ -7434,8 +7435,9 @@
                     if (fields.doctorNotes)  spectraFields.doctorNotes   = fields.doctorNotes;
                     if (fields.reqFacilityName)      spectraFields.availedAccommodation  = fields.reqFacilityName;
                     if (fields.approvedFacilityName) spectraFields.approvedAccommodation = fields.approvedFacilityName;
-                    // Store reqFacilityId for Day-care logic
-                    if (fields.reqFacilityId)        window._claimAI_reqFacilityId = fields.reqFacilityId;
+                    // Store for postMessage to iframe (used in staging fast path)
+                    if (fields.reqFacilityId)   window._claimAI_reqFacilityId   = fields.reqFacilityId;
+                    if (fields.reqFacilityName) window._claimAI_reqFacilityName = fields.reqFacilityName;
                     // Restore ApprovedFacilityID from DB on page load
                     // Do NOT trigger('change') — it causes Spectra handlers to reset it
                     if (fields.approvedFacilityId) {
@@ -7522,7 +7524,7 @@
                     // Fix: in ClaimAI job-page.tsx, bypass auth when ?embedded=1 is in URL.
                     // See job-page.tsx auth check useEffect.
                     var jobId = res.Data.jobId;
-                    var src   = _claimAiUrl + '/job/' + encodeURIComponent(jobId) + '?embedded=1';
+                    var src   = _claimAiUrl + '/job/' + encodeURIComponent(jobId) + '?embedded=1' + (window._claimAI_reqFacilityName ? '&availedAccom=' + encodeURIComponent(window._claimAI_reqFacilityName) : '');
                     console.log('[ClaimAI] STEP 3/4 Loading iframe:', src);
                     $('#divAiLoading').hide();
                     $('#ifrClaimAI').attr('src', src).show();
