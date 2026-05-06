@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Web;
@@ -269,30 +269,6 @@ namespace Enrollment.Controllers
             ViewData["SlNo"] = SlNo;
             ViewData["ClaimStageID"] = SID;
             Session["ClaimStageID"] = SID;
-
-            // ClaimAI Staging Server — fire webhook for every claim opened from dashboard
-            // Fire-and-forget: does not block page load, does not affect doctor if staging server is down
-            Task.Run(async () =>
-            {
-                try
-                {
-                    string stagingUrl = System.Configuration.ConfigurationManager
-                                              .AppSettings["StagingServerUrl"] ?? "";
-                    if (!string.IsNullOrWhiteSpace(stagingUrl))
-                    {
-                        using (var http = new System.Net.Http.HttpClient())
-                        {
-                            http.Timeout = TimeSpan.FromSeconds(5);
-                            var payload = Newtonsoft.Json.JsonConvert.SerializeObject(
-                                new { claimId = ClaimID.ToString(), slNo = SlNo.ToString() });
-                            var body = new System.Net.Http.StringContent(
-                                payload, System.Text.Encoding.UTF8, "application/json");
-                            await http.PostAsync(stagingUrl + "/webhook/claim-landed", body);
-                        }
-                    }
-                }
-                catch { /* staging server down — ignore, fallback handles it */ }
-            });
 
             ViewData["QMS"] = QMS;
             ViewData["QMSadmin"] = QMSadmin;
@@ -9567,229 +9543,118 @@ namespace Enrollment.Controllers
             }
         }
 
-        /// <summary>
-        /// GET /MedicalScrutiny/GetDocumentsForStaging
-        /// Called by the ClaimAI Staging Server to fetch bill + tariff PDFs.
-        /// Uses API key authentication (X-Staging-Key header) instead of session cookie
-        /// so the staging server does not need a user session.
-        /// </summary>
+
         [HttpGet]
-        [AllowAnonymous]
-        [OverrideAuthorization]
-        public ActionResult GetDocumentsForStaging(string claimId = null, string slNo = null)
+        public ActionResult IsClaimAISummaryAllowed(string claimId = null, string slNo = null)
         {
             try
             {
-                // ── API key authentication ────────────────────────────────────────
-                string expectedKey = System.Configuration.ConfigurationManager
-                                           .AppSettings["StagingApiKey"] ?? "";
-                string providedKey = Request.Headers["X-Staging-Key"] ?? "";
+                long claimIdLong;
+                int slNoInt;
+                if (!long.TryParse((claimId ?? "").Trim(), out claimIdLong) || claimIdLong <= 0)
+                    return Json(new { allowed = false, reason = "Invalid ClaimID" }, JsonRequestBehavior.AllowGet);
+                if (!int.TryParse((slNo ?? "1").Trim(), out slNoInt)) slNoInt = 1;
 
-                if (string.IsNullOrWhiteSpace(expectedKey) || providedKey != expectedKey)
+                string connStr = System.Configuration.ConfigurationManager
+                                       .ConnectionStrings["McarePlusEntities"].ConnectionString;
+                if (connStr.StartsWith("metadata=", StringComparison.OrdinalIgnoreCase))
                 {
-                    Response.StatusCode = 401;
-                    return Json(new { success = false, message = "Unauthorized" },
-                                JsonRequestBehavior.AllowGet);
+                    var m = System.Text.RegularExpressions.Regex.Match(
+                        connStr, @"provider connection string=""([^""]+)""",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (m.Success) connStr = m.Groups[1].Value.Replace("&quot;", """);
                 }
 
-                if (string.IsNullOrWhiteSpace(claimId))
+                int claimTypeId = 0, requestTypeId = 0;
+                using (var conn = new System.Data.SqlClient.SqlConnection(connStr))
                 {
-                    Response.StatusCode = 400;
-                    return Json(new { success = false, message = "claimId is required" },
-                                JsonRequestBehavior.AllowGet);
-                }
-
-                string cId = claimId.Trim();
-                string sNo = (slNo ?? "1").Trim();
-
-                // ── Fetch bill PDF ────────────────────────────────────────────────
-                // Reuse GetMedicalBillDocument logic by calling it internally
-                // We simulate a session so the existing method works
-                string billBase64   = null;
-                string billFileName = null;
-                string tariffBase64   = null;
-                string tariffFileName = null;
-
-                try
-                {
-                    // Bill PDF — same logic as GetMedicalBillDocument
-                    // Use zip-based approach (works in all environments)
-                    string env = (System.Configuration.ConfigurationManager
-                                        .AppSettings["Enviroment"] ?? "dev").ToLower().Trim();
-                    bool isProdOrPreprod = env == "prod" || env == "preprod" || env == "live";
-
-                    if (!isProdOrPreprod)
+                    conn.Open();
+                    var cmd = conn.CreateCommand();
+                    cmd.CommandText = @"
+                        SELECT TOP 1 ClaimTypeID, RequestTypeID
+                        FROM   Claimsdetails
+                        WHERE  ClaimID = @ClaimID
+                          AND  Slno    = @SlNo
+                          AND  ISNULL(Deleted, 0) = 0";
+                    cmd.Parameters.AddWithValue("@ClaimID", claimIdLong);
+                    cmd.Parameters.AddWithValue("@SlNo",    slNoInt);
+                    using (var rdr = cmd.ExecuteReader())
                     {
-                        string localBase = Server.MapPath("~/ClaimAIDocs/");
-                        string zipPath   = System.IO.Path.Combine(localBase, cId, "medicalbill.zip");
-
-                        if (System.IO.File.Exists(zipPath))
+                        if (rdr.Read())
                         {
-                            var pdfBytesList = new System.Collections.Generic.List<byte[]>();
-                            var seenHashes   = new System.Collections.Generic.HashSet<string>();
-
-                            using (var zip = System.IO.Compression.ZipFile.OpenRead(zipPath))
-                            {
-                                foreach (var entry in zip.Entries)
-                                {
-                                    if (!entry.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) continue;
-                                    using (var stream = entry.Open())
-                                    using (var ms = new System.IO.MemoryStream())
-                                    {
-                                        stream.CopyTo(ms);
-                                        byte[] pdfBytes = ms.ToArray();
-                                        string hash;
-                                        using (var md5 = System.Security.Cryptography.MD5.Create())
-                                            hash = BitConverter.ToString(md5.ComputeHash(pdfBytes)).Replace("-", "");
-                                        if (!seenHashes.Add(hash)) continue;
-                                        pdfBytesList.Add(pdfBytes);
-                                    }
-                                }
-                            }
-
-                            if (pdfBytesList.Count > 0)
-                            {
-                                byte[] merged     = MergePdfs(pdfBytesList);
-                                byte[] compressed = CompressPdf(merged);
-                                billBase64   = Convert.ToBase64String(compressed);
-                                billFileName = cId + "-medicalbill.pdf";
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Prod: DMS API — same logic as GetMedicalBillDocument prod path
-                        string dmsBaseUrl = System.Configuration.ConfigurationManager.AppSettings["DMSApiURL"].TrimEnd('/');
-                        string clientId   = System.Configuration.ConfigurationManager.AppSettings["ClientID"];
-                        string apiKey2    = System.Configuration.ConfigurationManager.AppSettings["DMSAPIKey"];
-
-                        System.Net.ServicePointManager.SecurityProtocol =
-                            System.Net.SecurityProtocolType.Tls12 |
-                            System.Net.SecurityProtocolType.Tls11 |
-                            System.Net.SecurityProtocolType.Tls;
-                        System.Net.ServicePointManager.ServerCertificateValidationCallback =
-                            (sender, cert, chain, errors) => true;
-
-                        string token = "";
-                        using (var client = new System.Net.Http.HttpClient())
-                        {
-                            client.Timeout = TimeSpan.FromSeconds(30);
-                            var jsonDoc = Newtonsoft.Json.JsonConvert.SerializeObject(new { clientId, apiKey = apiKey2 });
-                            var request = new System.Net.Http.HttpRequestMessage(
-                                System.Net.Http.HttpMethod.Post, dmsBaseUrl + "/api/Auth/generatetoken");
-                            request.Content = new System.Net.Http.StringContent(jsonDoc, null, "application/json");
-                            var response = client.SendAsync(request).GetAwaiter().GetResult();
-                            if (response.IsSuccessStatusCode)
-                                token = response.Content.ReadAsStringAsync().Result.Trim().Trim('"');
-                        }
-
-                        if (!string.IsNullOrWhiteSpace(token))
-                        {
-                            // Use existing GetMedicalBillDocument DMS logic via redirect
-                            // For simplicity in prod, we call the DMS API directly here
-                            // This mirrors what GetMedicalBillDocument does
-                            billBase64   = ""; // DMS path — implement same as GetMedicalBillDocument prod section
-                            billFileName = cId + "-medicalbill.pdf";
+                            claimTypeId   = rdr["ClaimTypeID"]   == DBNull.Value ? 0 : Convert.ToInt32(rdr["ClaimTypeID"]);
+                            requestTypeId = rdr["RequestTypeID"] == DBNull.Value ? 0 : Convert.ToInt32(rdr["RequestTypeID"]);
                         }
                     }
                 }
-                catch (Exception billEx)
-                {
-                    // Bill fetch failed — return what we have (tariff may still work)
-                    System.Diagnostics.Debug.WriteLine("[GetDocumentsForStaging] Bill fetch error: " + billEx.Message);
-                }
 
-                // ── Fetch tariff PDF ──────────────────────────────────────────────
-                // Reuse GetTariffDocument logic — call it as an internal ActionResult
-                // and extract the base64 from its JSON response
-                try
-                {
-                    string connStr2 = System.Configuration.ConfigurationManager
-                        .ConnectionStrings["McarePlusEntities"].ConnectionString;
-                    if (connStr2.StartsWith("metadata=", StringComparison.OrdinalIgnoreCase))
-                    {
-                        var m2 = System.Text.RegularExpressions.Regex.Match(
-                            connStr2, "provider connection string=\"([^\"]+)\"",
-                            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-                        if (m2.Success) connStr2 = m2.Groups[1].Value.Replace("&quot;", """);
-                    }
-
-                    int insurerId2 = 0; string insurerCode2 = "";
-                    if (long.TryParse(cId, out long cIdLong2))
-                        GetClaimInsurerInfo(cIdLong2, connStr2, out insurerId2, out insurerCode2);
-
-                    bool isPsu2 = PsuInsurerIds.Contains(insurerId2);
-
-                    string env2 = (System.Configuration.ConfigurationManager
-                                        .AppSettings["Enviroment"] ?? "dev").ToLower().Trim();
-                    bool isProd2 = env2 == "prod" || env2 == "preprod" || env2 == "live";
-
-                    if (!isProd2)
-                    {
-                        // Local/QA: load from tariff.zip
-                        string localBase2 = Server.MapPath("~/ClaimAIDocs/");
-                        string zipPath2   = System.IO.Path.Combine(localBase2, cId, "tariff.zip");
-                        if (System.IO.File.Exists(zipPath2))
-                        {
-                            var candidates2 = new System.Collections.Generic.List<System.Tuple<string, DateTime, byte[]>>();
-                            using (var zip2 = System.IO.Compression.ZipFile.OpenRead(zipPath2))
-                            {
-                                foreach (var entry2 in zip2.Entries)
-                                {
-                                    if (!entry2.Name.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase)) continue;
-                                    using (var s2 = entry2.Open())
-                                    using (var ms2 = new System.IO.MemoryStream())
-                                    {
-                                        s2.CopyTo(ms2);
-                                        candidates2.Add(System.Tuple.Create(entry2.Name, entry2.LastWriteTime.UtcDateTime, ms2.ToArray()));
-                                    }
-                                }
-                            }
-                            var best2 = PickBestTariffFile(candidates2, isPsu2, insurerCode2);
-                            if (best2 != null && best2.Item2 != null)
-                            {
-                                tariffBase64   = Convert.ToBase64String(best2.Item2);
-                                tariffFileName = best2.Item1;
-                            }
-                        }
-                    }
-                    else
-                    {
-                        // Prod: use S3/DMS — same logic as GetTariffDocument prod path
-                        // For now log and skip — tariff is optional
-                        System.Diagnostics.Debug.WriteLine("[GetDocumentsForStaging] Prod tariff fetch not implemented — skipping");
-                    }
-                }
-                catch (Exception tariffEx)
-                {
-                    System.Diagnostics.Debug.WriteLine("[GetDocumentsForStaging] Tariff fetch error: " + tariffEx.Message);
-                }
-
-                // ── Return both ───────────────────────────────────────────────────
-                if (string.IsNullOrWhiteSpace(billBase64))
-                {
-                    Response.StatusCode = 404;
-                    return Json(new { success = false, message = "Bill PDF not found for claimId=" + cId },
-                                JsonRequestBehavior.AllowGet);
-                }
-
-                var sl = new System.Web.Script.Serialization.JavaScriptSerializer { MaxJsonLength = int.MaxValue };
-                return Content(sl.Serialize(new
-                {
-                    success       = true,
-                    billBase64    = billBase64,
-                    billFileName  = billFileName,
-                    tariffBase64  = tariffBase64,
-                    tariffFileName= tariffFileName,
-                }), "application/json");
+                bool allowed = (claimTypeId == 1 && requestTypeId == 1);
+                return Json(new {
+                    allowed       = allowed,
+                    claimTypeId   = claimTypeId,
+                    requestTypeId = requestTypeId,
+                    reason        = allowed ? "OK" : "AI Summary is only available for Reimbursement Claim Type"
+                }, JsonRequestBehavior.AllowGet);
             }
             catch (Exception ex)
             {
-                Response.StatusCode = 500;
-                return Json(new { success = false, message = ex.Message },
-                            JsonRequestBehavior.AllowGet);
+                return Json(new { allowed = false, reason = ex.Message }, JsonRequestBehavior.AllowGet);
             }
         }
+
+        /// <summary>
+        /// POST /MedicalScrutiny/FinalizeClaimAISave
+        /// Called after all ClaimAI saves complete. Sets BillingCorrection=2 and IsAprvFacilitychanged=1
+        /// so that Claim Actions validation passes on next page load.
+        /// </summary>
+        [HttpPost]
+        public ActionResult FinalizeClaimAISave(string claimId = null, string slNo = null)
+        {
+            try
+            {
+                long claimIdLong;
+                int slNoInt;
+                if (!long.TryParse((claimId ?? "").Trim(), out claimIdLong) || claimIdLong <= 0)
+                    return Json(new { success = false, message = "Invalid ClaimID" });
+                if (!int.TryParse((slNo ?? "1").Trim(), out slNoInt)) slNoInt = 1;
+
+                string connStr = System.Configuration.ConfigurationManager
+                                       .ConnectionStrings["McarePlusEntities"].ConnectionString;
+                if (connStr.StartsWith("metadata=", StringComparison.OrdinalIgnoreCase))
+                {
+                    var m = System.Text.RegularExpressions.Regex.Match(
+                        connStr, @"provider connection string=""([^""]+)""",
+                        System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                    if (m.Success) connStr = m.Groups[1].Value.Replace("&quot;", """);
+                }
+
+                using (var conn = new System.Data.SqlClient.SqlConnection(connStr))
+                {
+                    conn.Open();
+
+                    // Set BillingCorrection=2 on Claimsdetails so billing validation passes
+                    var cmd1 = conn.CreateCommand();
+                    cmd1.CommandText = @"
+                        UPDATE Claimsdetails
+                        SET    BillingCorrection    = 2,
+                               IsAprvFacilitychanged = 1
+                        WHERE  ClaimID = @ClaimID
+                          AND  Slno    = @SlNo
+                          AND  ISNULL(Deleted, 0) = 0";
+                    cmd1.Parameters.AddWithValue("@ClaimID", claimIdLong);
+                    cmd1.Parameters.AddWithValue("@SlNo",    slNoInt);
+                    cmd1.ExecuteNonQuery();
+                }
+
+                return Json(new { success = true });
+            }
+            catch (Exception ex)
+            {
+                return Json(new { success = false, message = ex.Message });
+            }
+        }
+
+
 
         public ActionResult GetBSIForClaimAI(string claimId)
         {
