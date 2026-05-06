@@ -239,6 +239,7 @@ export function ResultView({
   const [presentingComplaint, setPresentingComplaint] = useState("");
   const [processingRemarks,   setProcessingRemarks]   = useState("");
   const [doctorNotes,         setDoctorNotes]         = useState("");
+  const [availedAccommodation, setAvailedAccommodation] = useState("");
   const [benefitPlanSnapshot, setBenefitPlanSnapshot] = useState<Record<string, unknown> | null>(null);
   const changeLogRef = useRef(new ChangeLog());
   const pendingChangesRef = useRef(new ChangeLog()); // Track pending changes separately
@@ -898,8 +899,11 @@ export function ResultView({
     }
   }, [displayAnalysis]);
 
-  // Pre-populate doctorNotes — fetch from API using claimId (most reliable)
+  // Pre-populate doctorNotes and availedAccommodation from spectraFields
   useEffect(() => {
+    if (spectraFields?.availedAccommodation) {
+      setAvailedAccommodation((spectraFields.availedAccommodation as string) ?? "");
+    }
     const claimId = state?.claimId?.trim();
     if (!claimId || doctorNotes) return;
     // Try spectraFields first (fast path)
@@ -1508,8 +1512,8 @@ export function ResultView({
                     onUpdateAnalysis={handleAnalysisUpdate}
                     addChangeLogEntry={addChangeLogEntry}
                     onScrollToPage={handleScrollToPage}
-                    availedAccommodation={(spectraFields?.availedAccommodation as string | undefined) ?? null}
-                    approvedAccommodation={(spectraFields?.approvedAccommodation as string | undefined) ?? "Day-care"}
+                    availedAccommodation={availedAccommodation || null}
+                    approvedAccommodation="Day-care"
                   />
                 </section>
                 <section id="medicalAdmissibility" className="py-2">
