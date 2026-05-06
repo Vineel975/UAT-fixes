@@ -53,6 +53,7 @@ interface ResultViewProps {
     facilityOptions?: Array<{ id: string; text: string }>;
     [key: string]: unknown;
   } | null;
+  availedAccommodationOverride?: string;
 }
 
 // ── Save split-button with dropdown ──────────────────────────────────────────
@@ -139,6 +140,7 @@ export function ResultView({
   pdfError,
   tariffFileName: tariffFileNameProp,
   spectraFields,
+  availedAccommodationOverride,
 }: ResultViewProps) {
   const updateResult = useConvexMutation(api.processing.updateResult);
   const pdfContainerRef = useRef<HTMLDivElement | null>(null);
@@ -901,7 +903,9 @@ export function ResultView({
 
   // Pre-populate doctorNotes and availedAccommodation from spectraFields
   useEffect(() => {
-    if (spectraFields?.availedAccommodation) {
+    if (availedAccommodationOverride) {
+      setAvailedAccommodation(availedAccommodationOverride);
+    } else if (spectraFields?.availedAccommodation) {
       setAvailedAccommodation((spectraFields.availedAccommodation as string) ?? "");
     }
     const claimId = state?.claimId?.trim();
