@@ -13988,6 +13988,10 @@ $('#lnkAdjudication').on('click', function () {
     setTimeout(function() {
         console.log('[ClaimAI] Auto-clicking Calculate');
         $('#btnBillCalculator').click();
+        // Auto-dismiss the "Calculated values loaded" dialog after it appears
+        setTimeout(function() {
+            $('#divAlertMessageBox').modal('hide');
+        }, 500);
     }, 2000);
 
 });
