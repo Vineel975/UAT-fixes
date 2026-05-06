@@ -9251,29 +9251,11 @@
                         var accomData = [{ Roomdays: String(roomVal), ICUdays: String(icuVal || 0), ExtimatedDays: String(roomVal + icuVal) }];
                         $('#hdnAccomdationRoomdays').val(JSON.stringify(accomData));
 
-                        // Set Day-care for cataract — dropdown is loaded by now
+                        // Set Day-care (ID=195) for cataract cases
                         if (window._claimAI_needsDayCare) {
-                            var $aprvDdl = $('#ddlApprovedFacility');
-                            $aprvDdl.removeAttr('disabled');
-                            var _dayCareVal = null;
-                            // Search dropdown options for "Day Care" text
-                            $aprvDdl.find('option').each(function() {
-                                var txt = $(this).text().trim().toLowerCase();
-                                if (txt === 'day care' || txt === 'daycare' || (txt.indexOf('day') !== -1 && txt.indexOf('care') !== -1)) {
-                                    _dayCareVal = $(this).val();
-                                    return false;
-                                }
-                            });
-                            if (_dayCareVal) {
-                                $aprvDdl.val(_dayCareVal);
-                                window._claimAI_needsDayCare = false;
-                                console.log('[ClaimAI] Approved Accommodation set to Day-care, val=' + _dayCareVal);
-                            } else {
-                                // Log all options to help debug
-                                var opts = [];
-                                $aprvDdl.find('option').each(function() { opts.push($(this).text().trim() + '=' + $(this).val()); });
-                                console.warn('[ClaimAI] Day-care not found. Options:', opts.join(', '));
-                            }
+                            $('#ddlApprovedFacility').removeAttr('disabled').val(195);
+                            window._claimAI_needsDayCare = false;
+                            console.log('[ClaimAI] Approved Accommodation set to Day-care (195)');
                         }
 
                         console.log('[ClaimAI] Clicking Save Hospitalization Details');
