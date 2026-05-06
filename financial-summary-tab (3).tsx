@@ -168,6 +168,17 @@ export function FinancialSummaryTab({
         const allCaps: string[] = [];
         const seen = new Set<string>();
 
+        // Log all parent names for debugging
+        const parentNames = new Set<string>();
+        conditions.forEach((row) => {
+          const parentId = parseId(getF(row, ["ParentID"]));
+          if (!parentId) return;
+          const parent = condById.get(parentId);
+          if (!parent) return;
+          parentNames.add(asT(getF(parent, ["Name"])));
+        });
+        console.log("[ClaimAI] Benefit plan condition parent names:", Array.from(parentNames));
+
         conditions.forEach((row) => {
           const parentId = parseId(getF(row, ["ParentID"]));
           if (!parentId) return;
