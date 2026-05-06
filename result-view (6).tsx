@@ -157,6 +157,8 @@ export function ResultView({
   });
   // Per-page rotation state: key = pageIndex, value = 0|90|180|270
   const [pageRotations, setPageRotations] = useState<Record<number, number>>({});
+  // Per-page zoom state: key = pageIndex, value = scale factor (default 1.0)
+  const [pageZooms, setPageZooms] = useState<Record<number, number>>({});
   // Tracks the last populated ICD code from the Diagnosis-Linked section
   const [lastIcdCodeFromTab, setLastIcdCodeFromTab] = useState<string>("");
   const rotatePage = useCallback((pageIndex: number, direction: "cw" | "ccw") => {
@@ -164,6 +166,16 @@ export function ResultView({
       ...prev,
       [pageIndex]: ((prev[pageIndex] ?? 0) + (direction === "cw" ? 90 : -90) + 360) % 360,
     }));
+  }, []);
+
+  const zoomPage = useCallback((pageIndex: number, direction: "in" | "out") => {
+    setPageZooms((prev) => {
+      const current = prev[pageIndex] ?? 1.0;
+      const next = direction === "in"
+        ? Math.min(current + 0.25, 3.0)
+        : Math.max(current - 0.25, 0.5);
+      return { ...prev, [pageIndex]: Math.round(next * 100) / 100 };
+    });
   }, []);
 
   // Inject rotation buttons onto each react-pdf Page via DOM observation
@@ -199,21 +211,38 @@ export function ResultView({
         wrapper.appendChild(makBtn("↺", "ccw"));
         wrapper.appendChild(makBtn("↻", "cw"));
 
+        // Zoom buttons
+        const makZoomBtn = (label: string, dir: "in" | "out") => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.title = dir === "in" ? "Zoom in" : "Zoom out";
+          btn.innerHTML = dir === "in"
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="11" y1="8" x2="11" y2="14"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/><line x1="8" y1="11" x2="14" y2="11"/></svg>`;
+          btn.style.cssText = "background:rgba(0,0,0,.5);border:none;border-radius:3px;padding:3px;cursor:pointer;display:flex;align-items:center;justify-content:center;";
+          btn.addEventListener("click", (e) => { e.stopPropagation(); zoomPage(idx, dir); });
+          return btn;
+        };
+        wrapper.appendChild(makZoomBtn("−", "out"));
+        wrapper.appendChild(makZoomBtn("+", "in"));
+
         page.appendChild(wrapper);
         page.addEventListener("mouseenter", () => { wrapper.style.opacity = "1"; wrapper.style.pointerEvents = "auto"; });
         page.addEventListener("mouseleave", () => { wrapper.style.opacity = "0"; wrapper.style.pointerEvents = "none"; });
       });
     };
 
-    // Apply CSS rotation to pages based on state
+    // Apply CSS rotation and zoom to pages based on state
     const applyRotations = () => {
       const pages = container.querySelectorAll<HTMLElement>(".react-pdf__Page");
       pages.forEach((page, idx) => {
         const rotation = pageRotations[idx] ?? 0;
+        const zoom     = pageZooms[idx] ?? 1.0;
+        const transform = `rotate(${rotation}deg) scale(${zoom})`;
         const canvas = page.querySelector<HTMLElement>("canvas");
-        if (canvas) canvas.style.transform = `rotate(${rotation}deg)`;
+        if (canvas) { canvas.style.transform = transform; canvas.style.transformOrigin = "top left"; }
         const inner = page.querySelector<HTMLElement>(".react-pdf__Page__canvas");
-        if (inner) inner.style.transform = `rotate(${rotation}deg)`;
+        if (inner) { inner.style.transform = transform; inner.style.transformOrigin = "top left"; }
       });
     };
 
@@ -223,7 +252,7 @@ export function ResultView({
     applyRotations();
 
     return () => observer.disconnect();
-  }, [pdfContainerRef, rotatePage, pageRotations, activePdfFile]);
+  }, [pdfContainerRef, rotatePage, pageRotations, zoomPage, pageZooms, activePdfFile]);
   const reportSections = useMemo(
     () => [
       { id: "patient", label: "Patient Info" },
