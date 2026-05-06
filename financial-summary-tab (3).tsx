@@ -168,25 +168,12 @@ export function FinancialSummaryTab({
         const allCaps: string[] = [];
         const seen = new Set<string>();
 
-        // Log all parent names for debugging
-        const parentNames = new Set<string>();
         conditions.forEach((row) => {
           const parentId = parseId(getF(row, ["ParentID"]));
           if (!parentId) return;
           const parent = condById.get(parentId);
           if (!parent) return;
-          parentNames.add(asT(getF(parent, ["Name"])));
-        });
-        console.log("[ClaimAI] Benefit plan condition parent names:", Array.from(parentNames));
-
-        conditions.forEach((row) => {
-          const parentId = parseId(getF(row, ["ParentID"]));
-          if (!parentId) return;
-          const parent = condById.get(parentId);
-          if (!parent) return;
-          const parentName = asT(getF(parent, ["Name"]));
-          // Match "alignment conditions" or "ailment conditions"
-          if (!parentName.toLowerCase().includes("alignment") && !parentName.toLowerCase().includes("ailment")) return;
+          // Include all conditions — AI will filter for cataract-relevant ones
 
           const condId = parseId(getF(row, ["ID"]));
           if (!condId) return;
