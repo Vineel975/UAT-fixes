@@ -1110,16 +1110,8 @@ function Fill_HospitalizationDetails(data) {
         'RequestTypeID=', data[0].RequestTypeID);
     // Always populate approved from ApprovedFacilityID saved in DB,
     // fallback to ReqFacilityID (availed). Never reset to 0.
-    var _aprvFacVal = data[0].ApprovedFacilityID || data[0].ReqFacilityID || 0;
-
-    // ClaimAI: For cataract claims (diagnosis 466), always set Approved Accommodation to Day-care (ID=195)
-    var _isCataractHosp = (typeof basicData !== 'undefined' && basicData[0] &&
-                           (basicData[0].claimdiagnosis == 466 ||
-                            (basicData[0].diagnosisName || '').toLowerCase().indexOf('cataract') !== -1));
-    if (_isCataractHosp) {
-        _aprvFacVal = 195;
-        console.log('[ClaimAI] Cataract: Approved Accommodation set to Day-care (195)');
-    }
+    // ClaimAI: Always set Approved Accommodation to Day-care (195)
+    var _aprvFacVal = 195;
 
     $("#ddlApprovedFacility").val(_aprvFacVal);
     console.log('[ClaimAI] ddlApprovedFacility set to:', _aprvFacVal, 'actual val after set:', $("#ddlApprovedFacility").val());
