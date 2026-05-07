@@ -1060,6 +1060,7 @@ export function ResultView({
           type:               "setBillingDetails",
           hospitalBillAmount: packageAmount,
           tariffAmount:       tariffAmtForBilling,
+          totalAmountApproved: eligibleAmount,
         },
         "*",
       );
