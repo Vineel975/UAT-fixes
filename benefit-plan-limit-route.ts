@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { benefitPlanLimitExtractionPrompt } from "@/src/prompts";
+import { generateText } from "ai";
+import { getModel } from "@/src/model-provider";
 
 export async function POST(request: NextRequest) {
   try {
@@ -14,32 +16,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ benefitPlanLimit: null, notes: "No cappings provided" });
     }
 
-    const response = await fetch("https://api.anthropic.com/v1/messages", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "claude-sonnet-4-20250514",
-        max_tokens: 500,
-        messages: [
-          {
-            role: "user",
-            content: benefitPlanLimitExtractionPrompt(cappings, diagnosis),
-          },
-        ],
-      }),
+    const { text } = await generateText({
+      model: getModel({ provider: "openrouter", modelName: "anthropic/claude-sonnet-4-5" }),
+      prompt: benefitPlanLimitExtractionPrompt(cappings, diagnosis),
+      maxTokens: 500,
     });
 
-    if (!response.ok) {
-      return NextResponse.json({ benefitPlanLimit: null, notes: `AI error: ${response.status}` });
-    }
-
-    const data = (await response.json()) as {
-      content?: Array<{ type: string; text: string }>;
-    };
-
-    const text = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean) as {
       benefitPlanLimit: number | null;
@@ -49,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(parsed);
   } catch (e) {
+    console.error("[benefit-plan-limit] error:", e);
     return NextResponse.json({ benefitPlanLimit: null, notes: String(e) }, { status: 500 });
   }
 }
