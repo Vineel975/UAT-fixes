@@ -204,7 +204,10 @@ export function FinancialSummaryTab({
           });
         });
 
+        console.log("[ClaimAI] allCaps collected:", allCaps.length, allCaps.slice(0, 3));
+
         if (allCaps.length === 0) {
+          // Try calling limit API with empty array to see if onBenefitPlanLimitExtracted fires
           setAlignmentCappings([]);
           return;
         }
