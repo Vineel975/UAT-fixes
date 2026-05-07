@@ -42,6 +42,8 @@ interface FinancialSummaryTabProps {
   claimId?: string;
   /** MemberPolicyID for previous claims lookup */
   memberPolicyId?: string;
+  /** Called when benefit plan limit is extracted from DB alignment cappings */
+  onBenefitPlanLimitExtracted?: (limit: number | null, note: string) => void;
   /** Called when user edits claimed/tariff amounts so parent can use updated approved amount */
   onAmountsChange?: (claimedAmount: number | null, tariffAmount: number | null, approvedAmount: number | null) => void;
   /** Called when user clicks Benefit extraction section — opens Benefit Plan tab on right */
@@ -55,6 +57,7 @@ export function FinancialSummaryTab({
   financialSummaryTotals,
   finalInsurerPayable,
   finalInsurerPayableNotes,
+  onBenefitPlanLimitExtracted,
   formatAmountValue,
   benefitAmount,
   lensType,
@@ -215,7 +218,33 @@ export function FinancialSummaryTab({
           });
           if (aiRes.ok) {
             const aiData = await aiRes.json() as { filtered?: string[] };
-            setAlignmentCappings(aiData.filtered ?? allCaps);
+            const filtered = aiData.filtered ?? allCaps;
+            setAlignmentCappings(filtered);
+
+            // Extract numeric benefit plan limit from filtered cappings
+            if (filtered.length > 0 && onBenefitPlanLimitExtracted) {
+              try {
+                const limitRes = await fetch("/api/benefit-plan-limit", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({
+                    cappings: filtered,
+                    diagnosis: diagnosis ?? "",
+                  }),
+                });
+                if (limitRes.ok) {
+                  const limitData = await limitRes.json() as {
+                    benefitPlanLimit: number | null;
+                    appliedCapping: string | null;
+                    notes: string;
+                  };
+                  onBenefitPlanLimitExtracted(
+                    limitData.benefitPlanLimit,
+                    limitData.notes ?? "",
+                  );
+                }
+              } catch { /* ignore — limit stays as AI-extracted from PDF */ }
+            }
           } else {
             setAlignmentCappings(allCaps);
           }
