@@ -204,55 +204,35 @@ export function FinancialSummaryTab({
           });
         });
 
-        console.log("[ClaimAI] allCaps collected:", allCaps.length, allCaps.slice(0, 3));
-
         if (allCaps.length === 0) {
-          // Try calling limit API with empty array to see if onBenefitPlanLimitExtracted fires
           setAlignmentCappings([]);
           return;
         }
 
-        // Send all cappings to AI via server-side route — filter for cataract-relevant only
-        try {
-          const aiRes = await fetch("/api/alignment-cappings", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ cappings: allCaps }),
-          });
-          if (aiRes.ok) {
-            const aiData = await aiRes.json() as { filtered?: string[] };
-            const filtered = aiData.filtered ?? allCaps;
-            setAlignmentCappings(filtered);
+        // Show all caps directly — no AI filter needed, data is already specific
+        setAlignmentCappings(allCaps);
 
-            // Extract numeric benefit plan limit from filtered cappings
-            if (filtered.length > 0 && onBenefitPlanLimitExtracted) {
-              try {
-                const limitRes = await fetch("/api/benefit-plan-limit", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    cappings: filtered,
-                    diagnosis: diagnosis ?? "",
-                  }),
-                });
-                if (limitRes.ok) {
-                  const limitData = await limitRes.json() as {
-                    benefitPlanLimit: number | null;
-                    appliedCapping: string | null;
-                    notes: string;
-                  };
-                  onBenefitPlanLimitExtracted(
-                    limitData.benefitPlanLimit,
-                    limitData.notes ?? "",
-                  );
-                }
-              } catch { /* ignore — limit stays as AI-extracted from PDF */ }
+        // Extract numeric benefit plan limit directly from allCaps
+        if (onBenefitPlanLimitExtracted) {
+          try {
+            const limitRes = await fetch("/api/benefit-plan-limit", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                cappings: allCaps,
+                diagnosis: diagnosis ?? "",
+              }),
+            });
+            if (limitRes.ok) {
+              const limitData = await limitRes.json() as {
+                benefitPlanLimit: number | null;
+                appliedCapping: string | null;
+                notes: string;
+              };
+              console.log("[ClaimAI] benefitPlanLimit from DB:", limitData);
+              onBenefitPlanLimitExtracted(limitData.benefitPlanLimit, limitData.notes ?? "");
             }
-          } else {
-            setAlignmentCappings(allCaps);
-          }
-        } catch {
-          setAlignmentCappings(allCaps);
+          } catch { /* ignore */ }
         }
       })
       .catch(() => {});
