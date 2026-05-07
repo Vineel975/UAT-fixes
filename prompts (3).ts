@@ -220,3 +220,29 @@ Rules:
 - If no items are relevant to cataract, return exactly: NONE
 - Do not add any explanation, heading, or extra text.
 `;
+
+export const benefitPlanLimitExtractionPrompt = (
+  cappings: string[],
+  diagnosis: string,
+): string => `
+You are a health insurance claim processor extracting the applicable benefit plan limit for a patient's medical condition.
+
+PATIENT DIAGNOSIS:
+${diagnosis}
+
+BENEFIT PLAN ALIGNMENT CAPPINGS (from the insurer's benefit plan database):
+${cappings.join("\n")}
+
+YOUR TASK:
+From the cappings above, identify the single most applicable monetary limit (in INR) for this patient's diagnosis/condition.
+
+Rules:
+1. Look for a numeric amount (₹, Rs, INR) in the cappings that directly applies to the patient's condition.
+2. If multiple limits exist, return the most specific and directly applicable one (e.g. a cataract-specific limit over a general eye limit).
+3. Extract only the pure numeric value — no currency symbols, no commas. Example: if limit is ₹50,000 return 50000.
+4. If no clear numeric limit is found, return null.
+5. Never invent or estimate a value not explicitly present in the cappings.
+
+Return ONLY a valid JSON object with no extra text:
+{"benefitPlanLimit": <number or null>, "appliedCapping": "<the exact capping line used, or null>", "notes": "<1 sentence explanation>"}
+`;
