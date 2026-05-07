@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { benefitPlanLimitExtractionPrompt } from "@/src/prompts";
 import type { ClaimCalculationResult } from "@/src/claim-calculation";
 import type {
   BSIData,
@@ -45,6 +44,7 @@ interface FinancialSummaryTabProps {
   memberPolicyId?: string;
   /** Called when benefit plan limit is extracted from DB alignment cappings */
   onBenefitPlanLimitExtracted?: (limit: number | null, note: string) => void;
+  onAlignmentCappingsExtracted?: (caps: string[]) => void;
   /** Called when user edits claimed/tariff amounts so parent can use updated approved amount */
   onAmountsChange?: (claimedAmount: number | null, tariffAmount: number | null, approvedAmount: number | null) => void;
   /** Called when user clicks Benefit extraction section — opens Benefit Plan tab on right */
@@ -59,6 +59,7 @@ export function FinancialSummaryTab({
   finalInsurerPayable,
   finalInsurerPayableNotes,
   onBenefitPlanLimitExtracted,
+  onAlignmentCappingsExtracted,
   formatAmountValue,
   benefitAmount,
   lensType,
@@ -206,30 +207,9 @@ export function FinancialSummaryTab({
         if (allCaps.length === 0) { setAlignmentCappings([]); return; }
 
         setAlignmentCappings(allCaps);
+        onAlignmentCappingsExtracted?.(allCaps);
 
-        // Extract benefit plan limit via Anthropic
-        if (!onBenefitPlanLimitExtracted) return;
-        try {
-          const limitRes = await fetch("https://api.anthropic.com/v1/messages", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              model: "claude-sonnet-4-20250514",
-              max_tokens: 500,
-              messages: [{ role: "user", content: benefitPlanLimitExtractionPrompt(allCaps, diagnosis ?? "") }],
-            }),
-          });
-          if (cancelled) return;
-          if (!limitRes.ok) { console.warn("[ClaimAI] benefit-plan-limit AI call failed:", limitRes.status); return; }
-          const limitData = await limitRes.json() as { content?: Array<{ type: string; text: string }> };
-          const text = limitData.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
-          const clean = text.replace(/```json|```/g, "").trim();
-          const parsed = JSON.parse(clean) as { benefitPlanLimit: number | null; notes: string };
-          console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
-          if (!cancelled) onBenefitPlanLimitExtracted(parsed.benefitPlanLimit, parsed.notes ?? "");
-        } catch (e) {
-          console.warn("[ClaimAI] benefit-plan-limit parse error:", e);
-        }
+
       } catch (e) {
         console.warn("[ClaimAI] benefit-plan useEffect error:", e);
       }
