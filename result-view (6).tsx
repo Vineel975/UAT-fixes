@@ -271,6 +271,7 @@ export function ResultView({
   const [processingRemarks,   setProcessingRemarks]   = useState("");
   const [doctorNotes,         setDoctorNotes]         = useState("");
   const [availedAccommodation, setAvailedAccommodation] = useState("");
+  const [dbBenefitPlanLimit, setDbBenefitPlanLimit] = useState<number | null>(null);
   const [benefitPlanSnapshot, setBenefitPlanSnapshot] = useState<Record<string, unknown> | null>(null);
   const changeLogRef = useRef(new ChangeLog());
   const pendingChangesRef = useRef(new ChangeLog()); // Track pending changes separately
@@ -1581,7 +1582,8 @@ export function ResultView({
                     tariffExtractionItem={displayAnalysis?.tariffExtractionItem}
                     hospitalBillBreakdown={displayAnalysis?.hospitalBillBreakdown}
                     hospitalBillPageNumber={displayAnalysis?.totalAmount?.pageNumber}
-                    benefitAmount={claimCalculation?.benefitAmount ?? displayAnalysis?.benefitAmount}
+                    benefitAmount={dbBenefitPlanLimit ?? claimCalculation?.benefitAmount ?? displayAnalysis?.benefitAmount}
+                    onBenefitPlanLimitExtracted={(limit) => setDbBenefitPlanLimit(limit)}
                     onHospitalAmountClick={(pageNumber) => {
                       if (pageNumber) {
                         handleScrollToPage(pageNumber);
