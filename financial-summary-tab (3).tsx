@@ -44,7 +44,6 @@ interface FinancialSummaryTabProps {
   memberPolicyId?: string;
   /** Called when benefit plan limit is extracted from DB alignment cappings */
   onBenefitPlanLimitExtracted?: (limit: number | null, note: string) => void;
-  onAlignmentCappingsExtracted?: (caps: string[]) => void;
   /** Called when user edits claimed/tariff amounts so parent can use updated approved amount */
   onAmountsChange?: (claimedAmount: number | null, tariffAmount: number | null, approvedAmount: number | null) => void;
   /** Called when user clicks Benefit extraction section — opens Benefit Plan tab on right */
@@ -59,7 +58,6 @@ export function FinancialSummaryTab({
   finalInsurerPayable,
   finalInsurerPayableNotes,
   onBenefitPlanLimitExtracted,
-  onAlignmentCappingsExtracted,
   formatAmountValue,
   benefitAmount,
   lensType,
@@ -207,7 +205,23 @@ export function FinancialSummaryTab({
         if (allCaps.length === 0) { setAlignmentCappings([]); return; }
 
         setAlignmentCappings(allCaps);
-        onAlignmentCappingsExtracted?.(allCaps);
+
+        // Extract benefit plan limit via server-side route
+        if (!onBenefitPlanLimitExtracted) return;
+        try {
+          const limitRes = await fetch("/api/benefit-plan-limit", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ cappings: allCaps, diagnosis: diagnosis ?? "" }),
+          });
+          if (cancelled) return;
+          if (!limitRes.ok) { console.warn("[ClaimAI] benefit-plan-limit route failed:", limitRes.status); return; }
+          const parsed = await limitRes.json() as { benefitPlanLimit: number | null; notes: string };
+          console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
+          if (!cancelled) onBenefitPlanLimitExtracted(parsed.benefitPlanLimit, parsed.notes ?? "");
+        } catch (e) {
+          console.warn("[ClaimAI] benefit-plan-limit error:", e);
+        }
 
 
       } catch (e) {
