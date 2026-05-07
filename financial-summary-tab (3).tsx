@@ -124,23 +124,24 @@ export function FinancialSummaryTab({
     void loadBsi();
   }, [loadBsi]);
 
-  // Fetch benefit plan — extract Alignment Conditions > Alignment Cappings
-  // Mirrors the buildConditionGroups + getRuleHighlights logic in benefit-plan-tab.tsx
+  // Fetch benefit plan — extract cappings and benefit plan limit
   useEffect(() => {
     const trimmed = claimId?.trim();
     if (!trimmed) return;
     let cancelled = false;
 
-    fetch("/api/benefit-plan", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ claimId: trimmed }),
-    })
-      .then((r) => r.json())
-      .then(async (d) => {
+    const run = async () => {
+      try {
+        const r = await fetch("/api/benefit-plan", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ claimId: trimmed }),
+        });
+        const d = await r.json() as { snapshot?: Record<string, unknown> };
         if (cancelled) return;
+
         type Row = Record<string, unknown>;
-        const snap = (d as { snapshot?: Record<string, unknown> }).snapshot;
+        const snap = d.snapshot;
         if (!snap) return;
 
         const getF = (row: Row, keys: string[]): unknown => {
@@ -161,14 +162,12 @@ export function FinancialSummaryTab({
         const conditions: Row[] = ((snap as { masters?: { conditions?: Row[] } }).masters?.conditions) ?? [];
         const ruleConfigs: Row[] = ((snap as { main?: { ruleConfigs?: Row[] } }).main?.ruleConfigs) ?? [];
 
-        // Build condition id→name map
         const condById = new Map<number, Row>();
         conditions.forEach((row) => {
           const id = parseId(getF(row, ["ID"]));
           if (id !== null) condById.set(id, row);
         });
 
-        // Extract from "Alignment Conditions" group — collect ALL cappings
         const allCaps: string[] = [];
         const seen = new Set<string>();
 
@@ -177,7 +176,6 @@ export function FinancialSummaryTab({
           if (!parentId) return;
           const parent = condById.get(parentId);
           if (!parent) return;
-          // Include all conditions — AI will filter for cataract-relevant ones
 
           const condId = parseId(getF(row, ["ID"]));
           if (!condId) return;
@@ -189,7 +187,6 @@ export function FinancialSummaryTab({
 
           linkedRules.forEach((rule) => {
             const remark = asT(getF(rule, ["Remarks"]));
-            // Also collect limit info
             const limits: string[] = [];
             const lim1 = describeLimit("Individual Limit", getF(rule, ["IndividualLimit"]), getF(rule, ["IndividualPerc"]), getF(rule, ["IndividualClaimCount"]));
             const lim2 = describeLimit("Claim Limit", getF(rule, ["ClaimLimit"]), getF(rule, ["ClaimPerc"]));
@@ -205,50 +202,44 @@ export function FinancialSummaryTab({
           });
         });
 
-        if (allCaps.length === 0) {
-          setAlignmentCappings([]);
-          return;
-        }
+        if (cancelled) return;
+        if (allCaps.length === 0) { setAlignmentCappings([]); return; }
 
-        // Show all caps directly — no AI filter needed, data is already specific
         setAlignmentCappings(allCaps);
 
-        // Extract numeric benefit plan limit — call Anthropic directly (client-side, no API key needed)
-        if (onBenefitPlanLimitExtracted) {
-          try {
-            const limitRes = await fetch("https://api.anthropic.com/v1/messages", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                model: "claude-sonnet-4-20250514",
-                max_tokens: 500,
-                messages: [{
-                  role: "user",
-                  content: benefitPlanLimitExtractionPrompt(allCaps, diagnosis ?? ""),
-                }],
-              }),
-            });
-            if (limitRes.ok) {
-              const limitData = await limitRes.json() as {
-                content?: Array<{ type: string; text: string }>;
-              };
-              const text = limitData.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
-              const clean = text.replace(/```json|```/g, "").trim();
-              const parsed = JSON.parse(clean) as {
-                benefitPlanLimit: number | null;
-                appliedCapping: string | null;
-                notes: string;
-              };
-              console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
-              onBenefitPlanLimitExtracted(parsed.benefitPlanLimit, parsed.notes ?? "");
-            }
-          } catch { /* ignore */ }
+        // Extract benefit plan limit via Anthropic
+        if (!onBenefitPlanLimitExtracted) return;
+        try {
+          const limitRes = await fetch("https://api.anthropic.com/v1/messages", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: "claude-sonnet-4-20250514",
+              max_tokens: 500,
+              messages: [{ role: "user", content: benefitPlanLimitExtractionPrompt(allCaps, diagnosis ?? "") }],
+            }),
+          });
+          if (cancelled) return;
+          if (!limitRes.ok) { console.warn("[ClaimAI] benefit-plan-limit AI call failed:", limitRes.status); return; }
+          const limitData = await limitRes.json() as { content?: Array<{ type: string; text: string }> };
+          const text = limitData.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
+          const clean = text.replace(/```json|```/g, "").trim();
+          const parsed = JSON.parse(clean) as { benefitPlanLimit: number | null; notes: string };
+          console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
+          if (!cancelled) onBenefitPlanLimitExtracted(parsed.benefitPlanLimit, parsed.notes ?? "");
+        } catch (e) {
+          console.warn("[ClaimAI] benefit-plan-limit parse error:", e);
         }
-      })
-      .catch(() => {});
+      } catch (e) {
+        console.warn("[ClaimAI] benefit-plan useEffect error:", e);
+      }
+    };
+
+    void run();
     return () => { cancelled = true; };
-  }, [claimId]);
-  // ───────────────────────────────────────────────────────────────────────────
+  }, [claimId, diagnosis, onBenefitPlanLimitExtracted]);
+
+    // ───────────────────────────────────────────────────────────────────────────
 
   const normalizeAmount = (value: unknown): number | null =>
     typeof value === "number" && Number.isFinite(value) && value >= 0
