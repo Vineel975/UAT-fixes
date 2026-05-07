@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { benefitPlanLimitExtractionPrompt } from "@/src/prompts";
 import type { ClaimCalculationResult } from "@/src/claim-calculation";
 import type {
   BSIData,
@@ -212,25 +213,34 @@ export function FinancialSummaryTab({
         // Show all caps directly — no AI filter needed, data is already specific
         setAlignmentCappings(allCaps);
 
-        // Extract numeric benefit plan limit directly from allCaps
+        // Extract numeric benefit plan limit — call Anthropic directly (client-side, no API key needed)
         if (onBenefitPlanLimitExtracted) {
           try {
-            const limitRes = await fetch("/api/benefit-plan-limit", {
+            const limitRes = await fetch("https://api.anthropic.com/v1/messages", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({
-                cappings: allCaps,
-                diagnosis: diagnosis ?? "",
+                model: "claude-sonnet-4-20250514",
+                max_tokens: 500,
+                messages: [{
+                  role: "user",
+                  content: benefitPlanLimitExtractionPrompt(allCaps, diagnosis ?? ""),
+                }],
               }),
             });
             if (limitRes.ok) {
               const limitData = await limitRes.json() as {
+                content?: Array<{ type: string; text: string }>;
+              };
+              const text = limitData.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
+              const clean = text.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(clean) as {
                 benefitPlanLimit: number | null;
                 appliedCapping: string | null;
                 notes: string;
               };
-              console.log("[ClaimAI] benefitPlanLimit from DB:", limitData);
-              onBenefitPlanLimitExtracted(limitData.benefitPlanLimit, limitData.notes ?? "");
+              console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
+              onBenefitPlanLimitExtracted(parsed.benefitPlanLimit, parsed.notes ?? "");
             }
           } catch { /* ignore */ }
         }
