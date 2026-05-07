@@ -9023,10 +9023,11 @@
 
                 // Bill Details automation from ClaimAI
                 if (event.data.type === 'setBillingDetails') {
-                    var hospBillAmt   = event.data.hospitalBillAmount || 0;
-                    var tariffBillAmt = event.data.tariffAmount        || 0;
-                    var claimID2      = $('#hdnClaimID').val();
-                    var slNo2         = $('#hdnClaimSlNo').val();
+                    var hospBillAmt        = event.data.hospitalBillAmount  || 0;
+                    var tariffBillAmt      = event.data.tariffAmount         || 0;
+                    var totalAmtApproved   = event.data.totalAmountApproved || 0;
+                    var claimID2           = $('#hdnClaimID').val();
+                    var slNo2              = $('#hdnClaimSlNo').val();
 
                     $.ajax({
                         url:  '@Url.Action("SaveBillingForClaimAI", "MedicalScrutiny")',
@@ -9035,7 +9036,8 @@
                             claimId:            claimID2,
                             slNo:               slNo2,
                             hospitalBillAmount: hospBillAmt,
-                            tariffAmount:       tariffBillAmt
+                            tariffAmount:       tariffBillAmt,
+                            totalAmountApproved: totalAmtApproved
                         },
                         success: function(res) {
                             console.log('[ClaimAI] SaveBilling response:', res);
