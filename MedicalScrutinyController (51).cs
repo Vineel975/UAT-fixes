@@ -8709,7 +8709,8 @@ namespace Enrollment.Controllers
         [HttpPost]
         public ActionResult SaveBillingForClaimAI(
             string claimId, string slNo,
-            string hospitalBillAmount, string tariffAmount)
+            string hospitalBillAmount, string tariffAmount,
+            string totalAmountApproved = null)
         {
             try
             {
@@ -8721,12 +8722,18 @@ namespace Enrollment.Controllers
                     return Json(new { success = false, message = "Invalid claimId" });
                 if (!int.TryParse((slNo ?? "").Trim(), out slNoInt)) slNoInt = 1;
 
-                decimal hospAmt = 0m, tariffAmt = 0m;
+                decimal hospAmt = 0m, tariffAmt = 0m, approvedAmt = 0m;
                 decimal.TryParse((hospitalBillAmount ?? "").Trim(), out hospAmt);
                 decimal.TryParse((tariffAmount ?? "").Trim(), out tariffAmt);
+                decimal.TryParse((totalAmountApproved ?? "").Trim(), out approvedAmt);
 
-                decimal deductionAmt = (hospAmt > tariffAmt && tariffAmt > 0) ? hospAmt - tariffAmt : 0m;
-                decimal eligibleAmt  = hospAmt - deductionAmt;
+                // Bill Amount = Total Medical Bill (hospAmt)
+                // Bill After Deductions = Total Amount Approved (min of bill, tariff, benefit plan limit)
+                // Deductions = Bill Amount - Bill After Deductions
+                decimal eligibleAmt  = approvedAmt > 0 ? approvedAmt
+                                     : (tariffAmt > 0 ? Math.Min(hospAmt, tariffAmt) : hospAmt);
+                decimal deductionAmt = hospAmt - eligibleAmt;
+                if (deductionAmt < 0) deductionAmt = 0m;
 
                 // ServiceDetails - all rows, only Others (6) has amounts
                 int[] allServiceIds = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 };
