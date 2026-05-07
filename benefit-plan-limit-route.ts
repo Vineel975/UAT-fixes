@@ -11,12 +11,14 @@ export async function POST(request: NextRequest) {
     const diagnosis = body?.diagnosis ?? "";
 
     if (cappings.length === 0) {
-      return NextResponse.json({ benefitPlanLimit: null, appliedCapping: null, notes: "No cappings provided" });
+      return NextResponse.json({ benefitPlanLimit: null, notes: "No cappings provided" });
     }
 
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-20250514",
         max_tokens: 500,
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest) {
     });
 
     if (!response.ok) {
-      return NextResponse.json({ benefitPlanLimit: null, appliedCapping: null, notes: "AI call failed" });
+      return NextResponse.json({ benefitPlanLimit: null, notes: `AI error: ${response.status}` });
     }
 
     const data = (await response.json()) as {
@@ -38,8 +40,6 @@ export async function POST(request: NextRequest) {
     };
 
     const text = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
-
-    // Parse JSON response
     const clean = text.replace(/```json|```/g, "").trim();
     const parsed = JSON.parse(clean) as {
       benefitPlanLimit: number | null;
@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     };
 
     return NextResponse.json(parsed);
-  } catch {
-    return NextResponse.json({ benefitPlanLimit: null, appliedCapping: null, notes: "Error extracting limit" });
+  } catch (e) {
+    return NextResponse.json({ benefitPlanLimit: null, notes: String(e) }, { status: 500 });
   }
 }
