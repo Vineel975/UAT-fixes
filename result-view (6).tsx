@@ -272,6 +272,7 @@ export function ResultView({
   const [doctorNotes,         setDoctorNotes]         = useState("");
   const [availedAccommodation, setAvailedAccommodation] = useState("");
   const [dbBenefitPlanLimit, setDbBenefitPlanLimit] = useState<number | null>(null);
+  const [dbAlignmentCappings, setDbAlignmentCappings] = useState<string[]>([]);
   const [benefitPlanSnapshot, setBenefitPlanSnapshot] = useState<Record<string, unknown> | null>(null);
   const changeLogRef = useRef(new ChangeLog());
   const pendingChangesRef = useRef(new ChangeLog()); // Track pending changes separately
@@ -952,6 +953,37 @@ export function ResultView({
       .catch(() => {});
   }, [state?.claimId, spectraFields]);
 
+  // When alignment cappings arrive from FinancialSummaryTab, extract the benefit plan limit
+  useEffect(() => {
+    if (dbAlignmentCappings.length === 0) return;
+    const diagnosis = (displayAnalysis?.diagnosisName?.value as string | undefined) ?? "";
+
+    const run = async () => {
+      try {
+        const { benefitPlanLimitExtractionPrompt } = await import("../src/prompts");
+        const response = await fetch("https://api.anthropic.com/v1/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "claude-sonnet-4-20250514",
+            max_tokens: 500,
+            messages: [{ role: "user", content: benefitPlanLimitExtractionPrompt(dbAlignmentCappings, diagnosis) }],
+          }),
+        });
+        if (!response.ok) return;
+        const data = await response.json() as { content?: Array<{ type: string; text: string }> };
+        const text = data.content?.find((b) => b.type === "text")?.text?.trim() ?? "";
+        const clean = text.replace(/```json|```/g, "").trim();
+        const parsed = JSON.parse(clean) as { benefitPlanLimit: number | null; notes: string };
+        console.log("[ClaimAI] benefitPlanLimit from DB:", parsed);
+        if (parsed.benefitPlanLimit) setDbBenefitPlanLimit(parsed.benefitPlanLimit);
+      } catch (e) {
+        console.warn("[ClaimAI] benefit-plan-limit error:", e);
+      }
+    };
+    void run();
+  }, [dbAlignmentCappings, displayAnalysis]);
+
   // Fetch benefit plan snapshot for alignment conditions
   useEffect(() => {
     const claimId = state?.claimId?.trim();
@@ -1583,7 +1615,8 @@ export function ResultView({
                     hospitalBillBreakdown={displayAnalysis?.hospitalBillBreakdown}
                     hospitalBillPageNumber={displayAnalysis?.totalAmount?.pageNumber}
                     benefitAmount={dbBenefitPlanLimit ?? claimCalculation?.benefitAmount ?? displayAnalysis?.benefitAmount}
-                    onBenefitPlanLimitExtracted={(limit) => setDbBenefitPlanLimit(limit)}
+                    onBenefitPlanLimitExtracted={(limit) => { if (limit) setDbBenefitPlanLimit(limit); }}
+                    onAlignmentCappingsExtracted={(caps) => setDbAlignmentCappings(caps)}
                     onHospitalAmountClick={(pageNumber) => {
                       if (pageNumber) {
                         handleScrollToPage(pageNumber);
